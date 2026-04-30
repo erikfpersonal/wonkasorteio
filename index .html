@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wonka Sorteio</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display+SC:wght@400;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --roxo: #2E193C;
+    --roxo-medio: #3d2456;
+    --roxo-claro: #5a3a7a;
+    --ouro: #F2C917;
+    --ouro-escuro: #c9a50f;
+    --branco: #ffffff;
+  }
+
+  body {
+    background: var(--roxo);
+    font-family: 'Playfair Display SC', serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .tela {
+    display: none;
+    width: 100%;
+    max-width: 400px;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    animation: fadeIn 0.5s ease;
+  }
+  .tela.ativa { display: flex; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* LOGO */
+  .logo-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .titulo { color: var(--ouro); font-size: 28px; font-family: 'Playfair Display SC', serif; font-weight: 700; letter-spacing: 2px; text-align: center; }
+  .subtitulo { color: var(--ouro); font-size: 13px; font-family: 'Bebas Neue', sans-serif; letter-spacing: 4px; opacity: 0.7; }
+
+  /* INPUTS */
+  .campo { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+  .campo label { color: var(--ouro); font-size: 10px; font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px; opacity: 0.8; }
+  .campo input {
+    background: var(--roxo-medio);
+    border: 1.5px solid rgba(242,201,23,0.4);
+    border-radius: 10px;
+    color: var(--branco);
+    padding: 14px 16px;
+    font-size: 15px;
+    font-family: 'Playfair Display SC', serif;
+    outline: none;
+    width: 100%;
+    transition: border-color 0.2s;
+  }
+  .campo input:focus { border-color: var(--ouro); }
+  .campo input::placeholder { color: rgba(255,255,255,0.3); }
+
+  /* BOTÕES */
+  .btn-ouro {
+    background: var(--ouro);
+    color: var(--roxo);
+    border: none;
+    border-radius: 10px;
+    padding: 16px;
+    font-size: 18px;
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 3px;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.2s, transform 0.1s;
+  }
+  .btn-ouro:hover { background: var(--ouro-escuro); }
+  .btn-ouro:active { transform: scale(0.98); }
+
+  .btn-ghost {
+    background: transparent;
+    border: 1.5px solid var(--ouro);
+    border-radius: 10px;
+    color: var(--ouro);
+    padding: 14px;
+    font-size: 16px;
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 2px;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.2s;
+  }
+  .btn-ghost:hover { background: rgba(242,201,23,0.1); }
+
+  /* DIVISOR */
+  .divisor { width: 100%; height: 1px; background: rgba(242,201,23,0.2); }
+
+  /* CONFIRMAÇÃO */
+  .confirm-box {
+    background: rgba(242,201,23,0.08);
+    border: 1.5px solid rgba(242,201,23,0.3);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+  }
+  .confirm-box p { color: rgba(255,255,255,0.8); font-size: 13px; font-family: 'Playfair Display SC', serif; line-height: 1.6; }
+  .confirm-box strong { color: var(--ouro); }
+
+  /* CAÇA-NÍQUEL */
+  .slot-wrap {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 10px 0;
+    position: relative;
+  }
+
+  .slot-col {
+    width: 96px;
+    height: 150px;
+    border: 2px solid var(--ouro);
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    background: var(--roxo-medio);
+  }
+
+  .slot-col.desfocado {
+    border-color: rgba(242,201,23,0.3);
+    opacity: 0.5;
+  }
+
+  .slot-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 8px;
+  }
+
+  .slot-inner.girando {
+    animation: girar 0.1s linear infinite;
+  }
+
+  .slot-inner.desacelerando1 { animation: girar 0.25s linear infinite; }
+  .slot-inner.desacelerando2 { animation: girar 0.5s linear infinite; }
+  .slot-inner.desacelerando3 { animation: girar 1.0s linear infinite; }
+  .slot-inner.desacelerando4 { animation: girar 2.0s linear infinite; }
+
+  @keyframes girar {
+    from { transform: translateY(0); }
+    to   { transform: translateY(-50%); }
+  }
+
+  /* Alavanca */
+  #alavanca-wrap { position: absolute; right: -14px; top: 10px; }
+  #alavanca-wrap:hover #alavanca-bola { box-shadow: 0 0 16px rgba(242,201,23,0.8); }
+  .alavanca-puxada #alavanca-haste { transform: rotate(40deg); }
+  .alavanca-puxada #alavanca-bola { transform: translateX(22px) translateY(20px); }
+
+  .bilhete-mini {
+    background: linear-gradient(135deg, #F2C917, #e5a800);
+    border-radius: 8px;
+    height: 130px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 8px;
+    flex-shrink: 0;
+  }
+
+  .bilhete-mini span {
+    color: var(--roxo);
+    font-size: 9px;
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 1px;
+    text-align: center;
+  }
+
+  /* OVERLAY brilho no centro do slot */
+  .slot-col::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 30px;
+    background: linear-gradient(to bottom, var(--roxo-medio), transparent);
+    z-index: 2;
+    pointer-events: none;
+  }
+  .slot-col::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 30px;
+    background: linear-gradient(to top, var(--roxo-medio), transparent);
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  .slot-status {
+    color: rgba(242,201,23,0.6);
+    font-size: 13px;
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 2px;
+    text-align: center;
+    min-height: 20px;
+  }
+
+  /* BILHETE REVELADO */
+  .bilhete-reveal {
+    background: linear-gradient(135deg, #F2C917 0%, #e5a800 50%, #F2C917 100%);
+    border-radius: 16px;
+    padding: 32px 28px;
+    width: 100%;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    position: relative;
+    animation: revelar 0.6s cubic-bezier(0.34,1.56,0.64,1) both;
+  }
+
+  @keyframes revelar {
+    from { opacity: 0; transform: scale(0.5) rotateY(90deg); }
+    to   { opacity: 1; transform: scale(1) rotateY(0deg); }
+  }
+
+  .bilhete-reveal::before {
+    content: '';
+    position: absolute;
+    left: -10px; top: 50%; transform: translateY(-50%);
+    width: 20px; height: 20px;
+    background: var(--roxo);
+    border-radius: 50%;
+  }
+  .bilhete-reveal::after {
+    content: '';
+    position: absolute;
+    right: -10px; top: 50%; transform: translateY(-50%);
+    width: 20px; height: 20px;
+    background: var(--roxo);
+    border-radius: 50%;
+  }
+
+  .bilhete-reveal .parabens {
+    color: var(--roxo);
+    font-size: 15px;
+    font-family: 'Playfair Display SC', serif;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  .bilhete-reveal .linha { width: 80%; height: 1px; background: rgba(46,25,60,0.2); }
+
+  .bilhete-reveal .nome-time {
+    color: var(--roxo);
+    font-size: 28px;
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 3px;
+    text-align: center;
+  }
+
+  .bilhete-reveal .entrada {
+    color: var(--roxo);
+    font-size: 11px;
+    font-family: 'Playfair Display SC', serif;
+    text-align: center;
+    opacity: 0.65;
+    font-style: italic;
+  }
+
+  /* RESULTADO GERAL */
+  .resultado-lista { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+
+  .time-card {
+    background: var(--roxo-medio);
+    border: 1px solid rgba(242,201,23,0.25);
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .time-barra { width: 4px; background: var(--ouro); border-radius: 4px; align-self: stretch; flex-shrink: 0; }
+
+  .time-info { flex: 1; }
+
+  .time-nome {
+    color: var(--ouro);
+    font-size: 16px;
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+  }
+
+  .membros-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  .membro-pill {
+    background: var(--roxo);
+    border: 1px solid rgba(242,201,23,0.2);
+    border-radius: 20px;
+    color: rgba(255,255,255,0.8);
+    font-size: 11px;
+    font-family: 'Playfair Display SC', serif;
+    padding: 3px 10px;
+  }
+
+  .membro-vazio {
+    color: rgba(255,255,255,0.2);
+    font-size: 11px;
+    font-family: 'Playfair Display SC', serif;
+    padding: 3px 0;
+  }
+
+  .time-count {
+    color: rgba(242,201,23,0.5);
+    font-size: 11px;
+    font-family: 'Bebas Neue', sans-serif;
+    flex-shrink: 0;
+  }
+
+  /* ERRO */
+  .erro-msg {
+    color: #ff6b6b;
+    font-size: 12px;
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 1px;
+    text-align: center;
+    min-height: 16px;
+  }
+
+  /* SCROLL resultado */
+  .resultado-scroll {
+    width: 100%;
+    max-height: 70vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-right: 4px;
+  }
+  .resultado-scroll::-webkit-scrollbar { width: 4px; }
+  .resultado-scroll::-webkit-scrollbar-track { background: transparent; }
+  .resultado-scroll::-webkit-scrollbar-thumb { background: rgba(242,201,23,0.3); border-radius: 4px; }
+
+  /* Shimmer no bilhete revelado */
+  @keyframes shimmer {
+    0%   { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+  .bilhete-reveal {
+    background: linear-gradient(105deg, #F2C917 0%, #ffe566 40%, #F2C917 60%, #e5a800 100%);
+    background-size: 200% 100%;
+    animation: revelar 0.6s cubic-bezier(0.34,1.56,0.64,1) both, shimmer 3s linear 0.6s infinite;
+  }
+</style>
+
+<!-- Player YouTube oculto -->
+<iframe id="yt-player" 
+  src="https://www.youtube.com/embed/eHdpNLFFEh8?start=43&autoplay=1&loop=1&playlist=eHdpNLFFEh8&controls=0&mute=0&enablejsapi=1"
+  style="position:fixed; top:-9999px; left:-9999px; width:1px; height:1px; opacity:0; pointer-events:none;"
+  allow="autoplay; encrypted-media"
+  frameborder="0">
+</iframe>
+
+<!-- Botão de volume -->
+<button id="btn-audio" onclick="toggleAudio()" style="
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: rgba(46,25,60,0.9);
+  border: 1.5px solid rgba(242,201,23,0.4);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  font-size: 20px;
+  cursor: pointer;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  transition: border-color 0.2s;
+">🔊</button>
+</head>
+<body>
+
+<!-- TELA 1: Entrada -->
+<div class="tela ativa" id="tela-entrada">
+  <div class="logo-wrap">
+    <svg width="70" height="68" viewBox="0 0 625 608" fill="none">
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M114.787 367.875H54.5279C36.8519 373.499 1.5 390.05 1.5 411.261V459.468C15.1587 487.589 71.8825 552.508 189.508 587.217C208.791 593.002 248.963 602.483 266.639 606.5H382.337C406.44 602.483 464.771 588.663 505.265 565.524C555.882 536.6 623.372 485.982 623.372 454.647V418.492C616.141 403.226 596.859 372.695 577.576 372.695H505.265V430.544C501.355 436.56 493.413 445.166 481.161 454.085C465.708 465.336 443.397 477.085 413.671 484.764C404.015 487.259 393.577 489.324 382.337 490.803H240.125C225.105 488.492 204.684 484.353 184.687 478.566C149.064 468.256 114.787 452.715 114.787 432.954V367.875Z" fill="#F2C917"/>
+      <path d="M505.265 430.544V372.695C493.213 300.384 522.137 213.612 531.779 158.173C552.99 119.608 558.293 79.4349 558.293 64.1693H548.651C549.266 74.6228 541.727 84.3737 529.895 93.0936C484.038 191.436 473.478 310.829 473.93 358.233L440.185 372.695L432.954 131.659C378.319 139.694 245.428 149.496 150.942 124.428C102.735 110.93 73.0073 97.9143 64.1693 93.0936C95.0219 127.803 115.59 290.743 122.018 367.875C126.839 367.875 138.89 368.839 148.532 372.695C185.169 401.62 274.674 410.458 314.847 411.261V418.492C287.529 421.706 223.253 423.313 184.687 404.03V478.566C204.684 484.353 225.105 488.492 240.125 490.803H382.337C393.577 489.324 404.015 487.259 413.671 484.764V418.492H355.823V404.03H413.671C438.739 404.03 469.11 383.14 481.161 372.695V454.085C493.413 445.166 501.355 436.56 505.265 430.544Z" fill="#F2C917"/>
+      <path d="M247.357 1.5C173.439 17.5691 33.3167 58.3845 64.1693 93.0936C73.0073 97.9143 102.735 110.93 150.942 124.428C245.428 149.496 378.319 139.694 432.954 131.659C459.769 125.64 504.624 111.718 529.895 93.0936C541.727 84.3737 549.266 74.6228 548.651 64.1693C546.723 31.3884 428.937 8.73108 370.285 1.5H247.357Z" fill="#F2C917"/>
+      <path d="M223.391 242.723C205.195 247.624 190.824 247.313 170.121 247.315L170.121 267.521C176.437 267.065 184.607 267.521 185.734 273.032C187.783 283.044 211.86 346.926 222.121 374.325L265.856 360.706C266.973 349.418 270.266 323.182 274.508 308.531C278.662 320.184 288.237 341.905 292.505 351.309C296.129 351.794 322.128 350.965 347.272 341.379C346.574 331.713 351.912 290.988 356.283 271.248L361.492 251.658L370.146 222.433C370.823 219.692 372.904 214.763 374.391 212.415C378.241 208.401 382.539 205.993 387.196 206.255C391.852 206.516 394.276 208.731 394.055 209.494C379.617 208.147 377.453 220.41 382.879 226.742C390.777 232.896 401.988 227.603 401.988 227.603C413.2 222.311 410.639 209.795 408.615 204.707C398.591 182.673 374.091 187.432 374.091 187.432C349.591 192.192 340.108 211.156 336.817 219.607C332.626 230.37 316.223 290.178 313.399 314.027L311.562 313.444L297.785 267.521L295.03 242.723L255.537 250.071L257.692 282.104L246.264 318.79L228.902 261.092L223.391 242.723Z" fill="#2E193C"/>
+    </svg>
+    <p class="titulo">Wonka Sorteio</p>
+    <p class="subtitulo">Fábrica de Times</p>
+  </div>
+  <div class="divisor"></div>
+  <div class="campo">
+    <label>Seu nome</label>
+    <input type="text" id="input-nome" placeholder="Como você se chama?" maxlength="40" />
+  </div>
+  <div class="campo">
+    <label>Código do grupo</label>
+    <input type="password" id="input-codigo" placeholder="Digite o código" maxlength="20" />
+  </div>
+  <p class="erro-msg" id="erro-entrada"></p>
+  <button class="btn-ouro" onclick="irParaConfirmacao()">QUERO MEU TIME</button>
+</div>
+
+<!-- TELA 2: Confirmação -->
+<div class="tela" id="tela-confirmacao">
+  <div class="logo-wrap">
+    <p class="titulo">Confirme seu nome</p>
+  </div>
+  <div class="confirm-box">
+    <p>Seu nome está correto?</p>
+    <p style="margin-top:10px; font-size:20px; font-family:'Bebas Neue',sans-serif; letter-spacing:2px;" id="confirm-nome-display"></p>
+    <p style="margin-top:10px; font-size:11px; opacity:0.6;">Após confirmar você <strong>não poderá</strong> sortear novamente.</p>
+  </div>
+  <button class="btn-ouro" onclick="iniciarSorteio()">SIM, PODE SORTEAR!</button>
+  <button class="btn-ghost" onclick="irParaTela('tela-entrada')">CORRIGIR MEU NOME</button>
+</div>
+
+<!-- TELA 3: Animação do sorteio -->
+<div class="tela" id="tela-sorteio">
+  <p class="titulo" style="font-size:22px;" id="slot-titulo">Puxe a alavanca!</p>
+  <div class="slot-wrap">
+    <div class="slot-col desfocado">
+      <div class="slot-inner" id="slot-esq"></div>
+    </div>
+    <div class="slot-col">
+      <div class="slot-inner" id="slot-centro"></div>
+    </div>
+    <div class="slot-col desfocado">
+      <div class="slot-inner" id="slot-dir"></div>
+    </div>
+    <!-- Alavanca -->
+    <div id="alavanca-wrap" onclick="puxarAlavanca()" style="position:absolute; right:-10px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:0; user-select:none;">
+      <!-- Bola -->
+      <div id="alavanca-bola" style="width:28px; height:28px; background:linear-gradient(135deg,#F2C917,#c9a50f); border-radius:50%; border:2px solid #c9a50f; box-shadow:0 2px 8px rgba(242,201,23,0.5); transition:transform 0.15s;"></div>
+      <!-- Haste -->
+      <div id="alavanca-haste" style="width:8px; height:80px; background:linear-gradient(180deg,#F2C917,#c9a50f); border-radius:4px; transform-origin:top center; transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);"></div>
+      <!-- Base -->
+      <div style="width:24px; height:12px; background:linear-gradient(180deg,#c9a50f,#8a6e00); border-radius:4px;"></div>
+    </div>
+  </div>
+  <p class="slot-status" id="slot-status">Tente a sorte — puxe a alavanca!</p>
+</div>
+
+<!-- TELA 4: Bilhete revelado -->
+<div class="tela" id="tela-revelado">
+  <div class="bilhete-reveal" id="bilhete-final">
+    <svg width="44" height="43" viewBox="0 0 909 685" fill="none">
+      <path d="M206.002 206.175C141.36 223.586 90.3069 222.482 16.7586 222.489L16.7586 294.271C39.1964 292.65 68.2206 294.271 72.226 313.848C79.5035 349.417 165.038 576.359 201.491 673.694L356.86 625.31C360.827 585.212 372.528 492.006 387.595 439.959C402.355 481.357 436.37 558.521 451.532 591.928C464.405 593.652 556.766 590.708 646.094 556.65C643.613 522.314 662.577 377.638 678.103 307.51L696.61 237.915L727.353 134.096C729.757 124.357 737.152 106.847 742.433 98.5032C756.112 84.2444 771.38 75.6921 787.922 76.6198C804.464 77.5476 813.073 85.4186 812.288 88.1294C760.998 83.3428 753.311 126.907 772.588 149.403C800.643 171.264 840.473 152.462 840.473 152.462C880.303 133.659 871.206 89.1976 864.016 71.1205C828.403-7.15402 741.366 9.75332 741.366 9.75332C654.329 26.6607 620.641 94.0339 608.949 124.056C594.06 162.289 535.791 374.759 525.758 459.485L519.232 457.412L470.29 294.271L460.501 206.175L320.2 232.278L327.856 346.076L287.261 476.404L225.579 271.431L206.002 206.175Z" fill="#2E193C"/>
+    </svg>
+    <p class="parabens">Parabéns, você foi escolhido!</p>
+    <div class="linha"></div>
+    <p class="nome-time" id="nome-time-revelado">LETZBORA</p>
+    <div class="linha"></div>
+    <p class="entrada">A sua entrada da fábrica acaba de ser liberada</p>
+  </div>
+  <button class="btn-ouro" onclick="irParaResultado()">VER TODOS OS TIMES</button>
+  <button class="btn-ghost" onclick="compartilhar()">COMPARTILHAR MEU TIME</button>
+</div>
+
+<!-- TELA ORG: Organizador -->
+<div class="tela" id="tela-organizador">
+  <p class="titulo" style="font-size:22px;">Painel do Organizador</p>
+  <!-- Formulário de pré-definição -->
+  <div style="width:100%; background:#3d2456; border:1px solid rgba(242,201,23,0.3); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:10px;">
+    <p style="color:#F2C917; font-size:11px; font-family:'Bebas Neue',sans-serif; letter-spacing:2px; margin:0;">Definir time de um participante</p>
+    <input id="org-nome" type="text" placeholder="Nome da pessoa" style="background:#2E193C; border:1.5px solid rgba(242,201,23,0.4); border-radius:10px; color:#fff; padding:12px 14px; font-size:14px; font-family:'Playfair Display SC',serif; outline:none; width:100%; box-sizing:border-box;" />
+    <select id="org-time" style="background:#2E193C; border:1.5px solid rgba(242,201,23,0.4); border-radius:10px; color:#fff; padding:12px 14px; font-size:13px; font-family:'Bebas Neue',sans-serif; letter-spacing:1px; outline:none; width:100%; box-sizing:border-box;">
+      <option value="">Selecione o time</option>
+      <option>LETZRUNNERS</option>
+      <option>LETZBORA</option>
+      <option>PITACHE ELITE</option>
+      <option>SOLARE DOURADO</option>
+      <option>BROOKIE POWER</option>
+      <option>LETZSQUAD</option>
+      <option>TRIPLO CHOCOLATE</option>
+    </select>
+    <button class="btn-ouro" onclick="salvarPredefinido()" style="font-size:14px; padding:12px;">SALVAR</button>
+    <p id="org-erro" style="color:#ff6b6b; font-size:11px; font-family:'Bebas Neue',sans-serif; letter-spacing:1px; text-align:center; min-height:14px; margin:0;"></p>
+  </div>
+
+  <!-- Lista de pré-definidos -->
+  <div id="lista-predefinidos" style="width:100%; display:flex; flex-direction:column; gap:6px;"></div>
+
+  <div class="resultado-scroll" id="lista-times-org" style="width:100%;"></div>
+  <button class="btn-ghost" onclick="irParaTela('tela-entrada')" style="margin-top:8px;">SAIR</button>
+</div>
+
+<!-- TELA 5: Resultado geral -->
+<div class="tela" id="tela-resultado">
+  <p class="titulo" style="font-size:22px;">Os Times</p>
+  <div class="resultado-scroll" id="lista-times"></div>
+  <button class="btn-ghost" onclick="irParaTela('tela-revelado')">VER MEU BILHETE</button>
+</div>
+
+<script>
+// Supabase
+const SUPA_URL = 'https://mqtwrrlemwdvsskmvbpk.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xdHdycmxlbXdkdnNza212YnBrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1NzUyNDEsImV4cCI6MjA5MzE1MTI0MX0.zp60hOMYStUG9Ac8iu7uZeLILnasEvdRPfKqzIwurO8';
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+const TIMES = ['LETZRUNNERS','LETZBORA','PITACHE ELITE','SOLARE DOURADO','BROOKIE POWER','LETZSQUAD','TRIPLO CHOCOLATE'];
+const CODIGO_VALIDO = 'WONKA2026';
+const CODIGO_ORG = 'org2026';
+
+let nomeUsuario = '';
+let timeSorteado = '';
+let resultadoSimulado = {};
+let tentativasNecessarias = 0;
+let tentativasFeitas = 0;
+let sorteioRodando = false;
+let predefinidos = {};
+
+TIMES.forEach(t => { resultadoSimulado[t] = []; });
+
+// Carrega dados do Supabase
+async function carregarDados() {
+  const { data: parts } = await sb.from('participantes').select('*');
+  const { data: preds } = await sb.from('predefinidos').select('*');
+  TIMES.forEach(t => { resultadoSimulado[t] = []; });
+  (parts || []).forEach(p => {
+    if (resultadoSimulado[p.time]) resultadoSimulado[p.time].push(p.nome);
+  });
+  predefinidos = {};
+  (preds || []).forEach(p => { predefinidos[p.nome.toLowerCase()] = p.time; });
+  renderizarResultado();
+  renderizarPredefinidos();
+}
+
+carregarDados();
+
+function irParaTela(id) {
+  document.querySelectorAll('.tela').forEach(t => t.classList.remove('ativa'));
+  const el = document.getElementById(id);
+  el.classList.add('ativa');
+  void el.offsetWidth;
+}
+
+async function irParaConfirmacao() {
+  const nome = document.getElementById('input-nome').value.trim();
+  const codigo = document.getElementById('input-codigo').value.trim();
+  const erro = document.getElementById('erro-entrada');
+  if (codigo === CODIGO_ORG) { await carregarDados(); irParaTela('tela-organizador'); return; }
+  if (!nome) { erro.textContent = 'COLOQUE SEU NOME'; return; }
+  if (codigo.toUpperCase() !== CODIGO_VALIDO) { erro.textContent = 'CÓDIGO INVÁLIDO'; return; }
+  // Verifica se já sorteou
+  const { data } = await sb.from('participantes').select('*').ilike('nome', nome);
+  if (data && data.length > 0) { erro.textContent = 'VOCÊ JÁ FEZ O SORTEIO'; return; }
+  erro.textContent = '';
+  nomeUsuario = nome;
+  document.getElementById('confirm-nome-display').textContent = nome.toUpperCase();
+  irParaTela('tela-confirmacao');
+}
+
+function iniciarSorteio() {
+  tentativasNecessarias = Math.random() < 0.5 ? 2 : 3;
+  tentativasFeitas = 0;
+  // Verifica se o nome está pré-definido pelo organizador
+  const nomeLower = nomeUsuario.trim().toLowerCase();
+  const timePredefinido = predefinidos[nomeLower];
+  if (timePredefinido) {
+    timeSorteado = timePredefinido;
+  } else {
+    // Escolhe o time com menos membros para equilibrar
+    timeSorteado = TIMES.reduce((menor, t) => {
+      const qtdMenor = (resultadoSimulado[menor] || []).length;
+      const qtdAtual = (resultadoSimulado[t] || []).length;
+      if (qtdAtual < qtdMenor) return t;
+      if (qtdAtual === qtdMenor) return Math.random() < 0.5 ? t : menor;
+      return menor;
+    });
+  }
+  preencherSlot('slot-esq');
+  preencherSlot('slot-centro');
+  preencherSlot('slot-dir');
+  irParaTela('tela-sorteio');
+}
+
+function puxarAlavanca() {
+  if (sorteioRodando) return;
+  sorteioRodando = true;
+  tentativasFeitas++;
+  const wrap = document.getElementById('alavanca-wrap');
+  const status = document.getElementById('slot-status');
+  const titulo = document.getElementById('slot-titulo');
+  const eUltima = tentativasFeitas >= tentativasNecessarias;
+
+  wrap.classList.add('alavanca-puxada');
+  setTimeout(() => wrap.classList.remove('alavanca-puxada'), 400);
+
+  titulo.textContent = 'Sorteando...';
+  status.textContent = 'Os bilhetes estão girando!';
+
+  preencherSlot('slot-esq');
+  preencherSlot('slot-centro');
+  preencherSlot('slot-dir');
+  ['slot-esq','slot-centro','slot-dir'].forEach(id => {
+    const el = document.getElementById(id);
+    el.className = 'slot-inner girando';
+    void el.offsetWidth;
+    el.className = 'slot-inner girando';
+  });
+
+  if (!eUltima) {
+    setTimeout(() => status.textContent = 'Quase...', 2500);
+    setTimeout(() => {
+      ['slot-esq','slot-centro','slot-dir'].forEach(id => {
+        document.getElementById(id).className = 'slot-inner desacelerando3';
+      });
+    }, 3500);
+    setTimeout(() => {
+      ['slot-esq','slot-centro','slot-dir'].forEach(id => {
+        const el = document.getElementById(id);
+        el.className = 'slot-inner';
+        el.innerHTML = bilheteMiniHTML(TIMES[Math.floor(Math.random() * TIMES.length)]);
+      });
+      status.textContent = 'Tente novamente!';
+      titulo.textContent = 'Puxe a alavanca!';
+      sorteioRodando = false;
+    }, 5000);
+  } else {
+    setTimeout(() => status.textContent = 'Está perto...', 2000);
+    setTimeout(() => status.textContent = 'Já já!', 3500);
+    setTimeout(() => {
+      ['slot-esq','slot-centro','slot-dir'].forEach(id => {
+        document.getElementById(id).className = 'slot-inner desacelerando2';
+      });
+    }, 4000);
+    setTimeout(() => {
+      ['slot-esq','slot-centro','slot-dir'].forEach(id => {
+        document.getElementById(id).className = 'slot-inner desacelerando4';
+      });
+    }, 4500);
+    setTimeout(() => {
+      ['slot-esq','slot-centro','slot-dir'].forEach(id => {
+        const el = document.getElementById(id);
+        el.className = 'slot-inner';
+        el.innerHTML = bilheteMiniHTML(timeSorteado);
+      });
+      status.textContent = 'SEU TIME FOI SORTEADO!';
+      setTimeout(async () => {
+        document.getElementById('nome-time-revelado').textContent = timeSorteado;
+        // Salva no Supabase
+        await sb.from('participantes').insert({ nome: nomeUsuario, time: timeSorteado });
+        resultadoSimulado[timeSorteado].push(nomeUsuario);
+        irParaTela('tela-revelado');
+        renderizarResultado();
+      }, 1500);
+    }, 8000);
+  }
+}
+
+function bilheteMiniHTML(time) {
+  return `<div class="bilhete-mini" style="height:130px; width:100%;">
+    <svg width="20" height="19" viewBox="0 0 909 685" fill="none"><path d="M206 206C141 224 90 222 17 222V294C39 293 68 294 72 314C80 349 165 576 201 674L357 625C361 585 373 492 388 440C402 481 436 559 452 592C464 594 557 591 646 557C644 522 663 378 678 308L697 238L727 134C730 124 737 107 742 99C756 84 771 76 788 76C804 77 813 85 812 88C761 83 753 127 773 149C801 171 840 152 840 152C880 134 871 89 864 71C828-7 741 10 741 10C654 27 621 94 609 124C594 162 536 375 526 459L519 457L470 294L461 206L320 232L328 346L287 476L226 271L206 206Z" fill="#2E193C"/></svg>
+    <span style="font-size:8px; font-weight:700; letter-spacing:1px; text-align:center;">${time}</span>
+  </div>`;
+}
+
+function preencherSlot(id) {
+  const el = document.getElementById(id);
+  const lista = [...TIMES, ...TIMES, ...TIMES, ...TIMES];
+  el.innerHTML = lista.map(t => `
+    <div class="bilhete-mini">
+      <svg width="16" height="15" viewBox="0 0 909 685" fill="none"><path d="M206 206C141 224 90 222 17 222V294C39 293 68 294 72 314C80 349 165 576 201 674L357 625C361 585 373 492 388 440C402 481 436 559 452 592C464 594 557 591 646 557C644 522 663 378 678 308L697 238L727 134C730 124 737 107 742 99C756 84 771 76 788 76C804 77 813 85 812 88C761 83 753 127 773 149C801 171 840 152 840 152C880 134 871 89 864 71C828-7 741 10 741 10C654 27 621 94 609 124C594 162 536 375 526 459L519 457L470 294L461 206L320 232L328 346L287 476L226 271L206 206Z" fill="#2E193C"/></svg>
+      <span>${t}</span>
+    </div>
+  `).join('');
+}
+
+function renderizarResultado() {
+  const html = TIMES.map(t => {
+    const membros = resultadoSimulado[t] || [];
+    return `
+      <div class="time-card">
+        <div class="time-barra"></div>
+        <div class="time-info">
+          <div class="time-nome">${t}</div>
+          <div class="membros-wrap">
+            ${membros.length > 0
+              ? membros.map(m => `<span class="membro-pill">${m}</span>`).join('')
+              : `<span class="membro-vazio">Aguardando...</span>`}
+          </div>
+        </div>
+        <span class="time-count">${membros.length}</span>
+      </div>`;
+  }).join('');
+
+  const lista = document.getElementById('lista-times');
+  if (lista) lista.innerHTML = html;
+
+  // Org — com botão de deletar por membro
+  const orgHtml = TIMES.map(t => {
+    const membros = resultadoSimulado[t] || [];
+    return `
+      <div class="time-card">
+        <div class="time-barra"></div>
+        <div class="time-info">
+          <div class="time-nome">${t}</div>
+          <div class="membros-wrap">
+            ${membros.length > 0
+              ? membros.map((m, i) => `
+                  <span class="membro-pill" style="display:flex; align-items:center; gap:6px;">
+                    ${m}
+                    <span onclick="deletarMembro('${t}',${i})" style="cursor:pointer; color:rgba(242,201,23,0.5); font-size:10px;">✕</span>
+                  </span>`).join('')
+              : `<span class="membro-vazio">Nenhum ainda</span>`}
+          </div>
+        </div>
+        <span class="time-count">${membros.length}</span>
+      </div>`;
+  }).join('');
+
+  const listaOrg = document.getElementById('lista-times-org');
+  if (listaOrg) listaOrg.innerHTML = orgHtml;
+}
+
+async function salvarPredefinido() {
+  const nome = document.getElementById('org-nome').value.trim();
+  const time = document.getElementById('org-time').value;
+  const erro = document.getElementById('org-erro');
+  if (!nome) { erro.textContent = 'COLOQUE O NOME'; return; }
+  if (!time) { erro.textContent = 'SELECIONE O TIME'; return; }
+  await sb.from('predefinidos').upsert({ nome, time }, { onConflict: 'nome' });
+  predefinidos[nome.toLowerCase()] = time;
+  erro.textContent = '';
+  document.getElementById('org-nome').value = '';
+  document.getElementById('org-time').value = '';
+  renderizarPredefinidos();
+}
+
+function renderizarPredefinidos() {
+  const lista = document.getElementById('lista-predefinidos');
+  const entries = Object.entries(predefinidos);
+  if (entries.length === 0) { lista.innerHTML = ''; return; }
+  lista.innerHTML = entries.map(([nome, time]) => `
+    <div style="background:#3d2456; border:1px solid rgba(242,201,23,0.2); border-radius:10px; padding:10px 14px; display:flex; align-items:center; justify-content:space-between;">
+      <div>
+        <span style="color:#fff; font-size:13px; font-family:'Playfair Display SC',serif;">${nome}</span>
+        <span style="color:rgba(242,201,23,0.6); font-size:10px; font-family:'Bebas Neue',sans-serif; letter-spacing:1px; margin-left:8px;">→ ${time}</span>
+      </div>
+      <span onclick="deletarPredefinido('${nome}')" style="cursor:pointer; color:rgba(242,201,23,0.4); font-size:13px;">✕</span>
+    </div>
+  `).join('');
+}
+
+async function deletarPredefinido(nome) {
+  await sb.from('predefinidos').delete().ilike('nome', nome);
+  delete predefinidos[nome.toLowerCase()];
+  renderizarPredefinidos();
+}
+
+async function deletarMembro(time, idx) {
+  if (!confirm('Remover este participante?')) return;
+  const nome = resultadoSimulado[time][idx];
+  await sb.from('participantes').delete().eq('nome', nome).eq('time', time);
+  resultadoSimulado[time].splice(idx, 1);
+  renderizarResultado();
+}
+
+function irParaResultado() {
+  renderizarResultado();
+  irParaTela('tela-resultado');
+}
+
+function compartilhar() {
+  const texto = `Fui sorteado para o time ${timeSorteado} na Wonka Run! 🎟️✨`;
+  if (navigator.share) {
+    navigator.share({ text: texto });
+  } else {
+    navigator.clipboard.writeText(texto).then(() => alert('Texto copiado! Cole onde quiser.'));
+  }
+}
+
+renderizarResultado();
+
+let audioAtivo = true;
+function toggleAudio() {
+  const iframe = document.getElementById('yt-player');
+  const btn = document.getElementById('btn-audio');
+  if (audioAtivo) {
+    iframe.src = iframe.src.replace('mute=0','mute=1');
+    btn.textContent = '🔇';
+    audioAtivo = false;
+  } else {
+    iframe.src = iframe.src.replace('mute=1','mute=0');
+    btn.textContent = '🔊';
+    audioAtivo = true;
+  }
+}
+</script>
+</body>
+</html>
