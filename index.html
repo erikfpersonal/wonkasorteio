@@ -379,25 +379,30 @@
   frameborder="0">
 </iframe>
 
-<!-- Botão de volume -->
-<button id="btn-audio" onclick="toggleAudio()" style="
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  background: rgba(46,25,60,0.9);
-  border: 1.5px solid rgba(242,201,23,0.4);
-  border-radius: 50%;
-  width: 44px;
-  height: 44px;
-  font-size: 20px;
-  cursor: pointer;
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-  transition: border-color 0.2s;
-">🔊</button>
+<!-- Controle de áudio -->
+<div style="position:fixed; bottom:20px; right:20px; z-index:9999; display:flex; flex-direction:column; align-items:center; gap:6px;">
+  <input type="range" min="0" max="100" value="70" oninput="setVolumeMusica(this.value/100)" style="
+    writing-mode: vertical-lr;
+    direction: rtl;
+    height: 70px;
+    accent-color: #F2C917;
+    cursor: pointer;
+  " />
+  <button id="btn-audio" onclick="toggleAudio()" style="
+    background: rgba(46,25,60,0.9);
+    border: 1.5px solid rgba(242,201,23,0.4);
+    border-radius: 12px;
+    width: 48px;
+    height: 48px;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  ">🔊<span style="font-size:9px;font-family:'Bebas Neue';letter-spacing:1px;color:#F2C917;">SOM</span></button>
+</div>
 </head>
 <body>
 
@@ -497,7 +502,7 @@
       <option>SOLARE DOURADO</option>
       <option>BROOKIE POWER</option>
       <option>LETZSQUAD</option>
-      <option>TRIPLO CHOCOLATE</option>
+      
     </select>
     <button class="btn-ouro" onclick="salvarPredefinido()" style="font-size:14px; padding:12px;">SALVAR</button>
     <p id="org-erro" style="color:#ff6b6b; font-size:11px; font-family:'Bebas Neue',sans-serif; letter-spacing:1px; text-align:center; min-height:14px; margin:0;"></p>
@@ -523,7 +528,7 @@ const SUPA_URL = 'https://mqtwrrlemwdvsskmvbpk.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xdHdycmxlbXdkdnNza212YnBrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1NzUyNDEsImV4cCI6MjA5MzE1MTI0MX0.zp60hOMYStUG9Ac8iu7uZeLILnasEvdRPfKqzIwurO8';
 const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
 
-const TIMES = ['LETZRUNNERS','LETZBORA','PITACHE ELITE','SOLARE DOURADO','BROOKIE POWER','LETZSQUAD','TRIPLO CHOCOLATE'];
+const TIMES = ['LETZRUNNERS','LETZBORA','PITACHE ELITE','SOLARE DOURADO','BROOKIE POWER','LETZSQUAD',];
 const CODIGO_VALIDO = 'WONKA2026';
 const CODIGO_ORG = 'org2026';
 
@@ -611,6 +616,8 @@ function puxarAlavanca() {
 
   wrap.classList.add('alavanca-puxada');
   setTimeout(() => wrap.classList.remove('alavanca-puxada'), 400);
+  tocarAlavanca();
+  setTimeout(() => iniciarRoleta(), 300);
 
   titulo.textContent = 'Sorteando...';
   status.textContent = 'Os bilhetes estão girando!';
@@ -638,6 +645,7 @@ function puxarAlavanca() {
         el.className = 'slot-inner';
         el.innerHTML = bilheteMiniHTML(TIMES[Math.floor(Math.random() * TIMES.length)]);
       });
+      pararRoleta();
       status.textContent = 'Tente novamente!';
       titulo.textContent = 'Puxe a alavanca!';
       sorteioRodando = false;
@@ -661,6 +669,7 @@ function puxarAlavanca() {
         el.className = 'slot-inner';
         el.innerHTML = bilheteMiniHTML(timeSorteado);
       });
+      pararRoleta();
       status.textContent = 'SEU TIME FOI SORTEADO!';
       setTimeout(async () => {
         document.getElementById('nome-time-revelado').textContent = timeSorteado;
@@ -798,18 +807,95 @@ function compartilhar() {
 
 renderizarResultado();
 
-let audioAtivo = true;
+// ─── WEB AUDIO ───
+let audioCtx = null;
+let roletaSource = null;
+let roletaGain = null;
+let musicaAtiva = true;
+let volumeMusica = 0.7;
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+// Som de alavanca sendo puxada
+function tocarAlavanca() {
+  const ctx = getAudioCtx();
+  const t = ctx.currentTime;
+  // Click metálico
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(180, t);
+  osc.frequency.exponentialRampToValueAtTime(60, t + 0.15);
+  gain.gain.setValueAtTime(0.3, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+  osc.start(t); osc.stop(t + 0.2);
+
+  // Clique seco
+  const buf = ctx.createBuffer(1, ctx.sampleRate * 0.05, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+  const src = ctx.createBufferSource();
+  const g2 = ctx.createGain();
+  src.buffer = buf; src.connect(g2); g2.connect(ctx.destination);
+  g2.gain.setValueAtTime(0.25, t + 0.05);
+  src.start(t + 0.05);
+}
+
+// Som de roleta girando (loop)
+function iniciarRoleta() {
+  pararRoleta();
+  const ctx = getAudioCtx();
+  roletaGain = ctx.createGain();
+  roletaGain.gain.setValueAtTime(0.08, ctx.currentTime);
+  roletaGain.connect(ctx.destination);
+
+  function tick() {
+    if (!roletaGain) return;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.connect(g); g.connect(roletaGain);
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(400 + Math.random() * 200, t);
+    g.gain.setValueAtTime(0.6, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+    osc.start(t); osc.stop(t + 0.05);
+  }
+
+  let interval = 80;
+  roletaSource = { interval: null };
+  roletaSource.interval = setInterval(tick, interval);
+}
+
+function pararRoleta() {
+  if (roletaSource) { clearInterval(roletaSource.interval); roletaSource = null; }
+  if (roletaGain) { roletaGain.disconnect(); roletaGain = null; }
+}
+
+// Controle de volume da música (iframe YT via postMessage)
+function setVolumeMusica(vol) {
+  volumeMusica = vol;
+  const iframe = document.getElementById('yt-player');
+  iframe.contentWindow.postMessage(JSON.stringify({
+    event: 'command', func: 'setVolume', args: [Math.round(vol * 100)]
+  }), '*');
+}
+
 function toggleAudio() {
   const iframe = document.getElementById('yt-player');
   const btn = document.getElementById('btn-audio');
-  if (audioAtivo) {
+  if (musicaAtiva) {
     iframe.src = iframe.src.replace('mute=0','mute=1');
-    btn.textContent = '🔇';
-    audioAtivo = false;
+    btn.innerHTML = '🔇<span style="font-size:9px;display:block;font-family:Bebas Neue;letter-spacing:1px;color:#F2C917;">SOM</span>';
+    musicaAtiva = false;
   } else {
     iframe.src = iframe.src.replace('mute=1','mute=0');
-    btn.textContent = '🔊';
-    audioAtivo = true;
+    btn.innerHTML = '🔊<span style="font-size:9px;display:block;font-family:Bebas Neue;letter-spacing:1px;color:#F2C917;">SOM</span>';
+    musicaAtiva = true;
   }
 }
 </script>
